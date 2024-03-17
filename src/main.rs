@@ -1,10 +1,12 @@
+use std::env;
 use std::io::Error;
 
 mod bmp;
 use bmp::BMPFile;
 
 fn main() -> Result<(), Error> {
-    let maybe_bmp = BMPFile::new("monochrome_test.bmp");
+    let args: Vec<String> = env::args().collect();
+    let maybe_bmp = BMPFile::new(&args[1]);
 
     match maybe_bmp {
         Ok(bmp) => {

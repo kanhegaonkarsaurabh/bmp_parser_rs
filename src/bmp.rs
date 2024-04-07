@@ -1,6 +1,7 @@
+use byteorder::{BigEndian, ReadBytesExt};
 use std::{
     fs::File,
-    io::{Error, Read},
+    io::{Cursor, Error, Read},
 };
 // ref for BMP spec: https://upload.wikimedia.org/wikipedia/commons/7/75/BMPfileFormat.svg
 
@@ -65,8 +66,9 @@ impl BMPFile {
             );
         }
 
-        let bmp_signature: u16 =
-            ((bmp_signature_bytes[0] as u16) << 8) | bmp_signature_bytes[1] as u16;
+        let mut bmp_signature_cursor = Cursor::new(&bmp_signature_bytes);
+
+        let bmp_signature: u16 = bmp_signature_cursor.read_u16::<BigEndian>()?;
 
         Ok(Self {
             header: BMPFileHeader {

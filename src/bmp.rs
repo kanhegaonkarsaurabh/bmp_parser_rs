@@ -6,7 +6,7 @@ use std::{
 
 pub struct BMPFileHeader {
     // (2 bytes) signature of the bmp file
-    pub signature: Vec<u8>,
+    pub signature: u16,
     // (4 bytes) size of the bmp file
     // size: u32,
     // (2 bytes) reserved byte 1 for the spec
@@ -55,15 +55,18 @@ impl BMPFile {
 
         // first we get the signature bits in header and
         // validate that the signature is correct
-        let mut bmp_signature: Vec<u8> = vec![0; 2];
-        bmp_file.read_exact(&mut bmp_signature)?;
+        let mut bmp_signature_bytes: Vec<u8> = vec![0; 2];
+        bmp_file.read_exact(&mut bmp_signature_bytes)?;
 
-        if !BMPFile::validate_header_signature(&bmp_signature) {
+        if !BMPFile::validate_header_signature(&bmp_signature_bytes) {
             panic!(
                 "{:?} is an invalid BMP file due to invalid BMP signature: [{:#x}, {:#x}]",
-                bmp_filepath, bmp_signature[0], bmp_signature[1]
+                bmp_filepath, bmp_signature_bytes[0], bmp_signature_bytes[1]
             );
         }
+
+        let bmp_signature: u16 =
+            ((bmp_signature_bytes[0] as u16) << 8) | bmp_signature_bytes[1] as u16;
 
         Ok(Self {
             header: BMPFileHeader {

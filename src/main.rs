@@ -10,10 +10,7 @@ fn main() -> Result<(), Error> {
 
     match maybe_bmp {
         Ok(bmp) => {
-            println!(
-                "signature: [{:#x}, {:#x}]",
-                bmp.header.signature[0], bmp.header.signature[1]
-            );
+            println!("signature: {:#x}", bmp.header.signature);
         }
         Err(error) => panic!("{:?}", error),
     }

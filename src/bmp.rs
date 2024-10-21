@@ -1,13 +1,13 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use std::{
     fs::File,
-    io::{Cursor, Error, Read},
+    io::{Error, ErrorKind, Read},
 };
 // ref for BMP spec: https://upload.wikimedia.org/wikipedia/commons/7/75/BMPfileFormat.svg
 
 pub struct BMPFileHeader {
     // (2 bytes) signature of the bmp file
-    pub signature: u16,
+    pub signature: [u8; 2],
     // (4 bytes) size of the bmp file
     // size: u32,
     // (2 bytes) reserved byte 1 for the spec
@@ -51,35 +51,44 @@ pub struct BMPFile {
 }
 
 impl BMPFile {
-    pub fn new(bmp_filepath: &str) -> Result<Self, Error> {
+    pub fn validate_file_signature<'a>(bmp_filepath: &'a str) -> Result<&[u8; 2], Error> {
         let mut bmp_file = File::open(bmp_filepath)?;
-
         // first we get the signature bits in header and
+
         // validate that the signature is correct
         let mut bmp_signature_bytes: Vec<u8> = vec![0; 2];
         bmp_file.read_exact(&mut bmp_signature_bytes)?;
 
-        if !BMPFile::validate_header_signature(&bmp_signature_bytes) {
-            panic!(
-                "{:?} is an invalid BMP file due to invalid BMP signature: [{:#x}, {:#x}]",
-                bmp_filepath, bmp_signature_bytes[0], bmp_signature_bytes[1]
-            );
+        if &bmp_signature_bytes[..2] == b"BM" {
+            // tried returning OK(&bmp_signature_bytes[..2]) here but somehow
+            // couldn't type constrain it to be &[u8; 2] as it was returning &[u8]
+            // instead
+            return Ok(b"BM");
         }
 
-        let mut bmp_signature_cursor = Cursor::new(&bmp_signature_bytes);
+        // failure of signature
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "invalid bmp signature header",
+        ));
+    }
 
-        let bmp_signature: u16 = bmp_signature_cursor.read_u16::<BigEndian>()?;
-
-        Ok(Self {
+    pub fn parse<'a>(
+        bmp_filepath: &'a str,
+        bmp_signature: &'static [u8; 2],
+    ) -> Result<BMPFile, Error> {
+        // implement further parsing of the bmp file here
+        Ok(BMPFile {
             header: BMPFileHeader {
-                signature: bmp_signature,
+                signature: *bmp_signature,
             },
         })
     }
-    fn validate_header_signature(signature: &[u8]) -> bool {
-        // 0x42 = B
-        // Ox4D = M
-        // 'BM' is the signature for common bmp files
-        signature[0] == 0x42 && signature[1] == 0x4D
+
+    pub fn new<'a>(bmp_filepath: &'a str) -> Result<Self, Error> {
+        match BMPFile::validate_file_signature(bmp_filepath) {
+            Ok(bmp_signature) => BMPFile::parse(bmp_filepath, bmp_signature),
+            Err(error) => Err(error),
+        }
     }
 }

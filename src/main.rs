@@ -6,7 +6,7 @@ use bmp::BMPFile;
 
 fn main() -> Result<(), Error> {
     let args: Vec<String> = env::args().collect();
-    let maybe_bmp = BMPFile::new(&args[1]);
+    let maybe_bmp = BMPFile::new(args[1].clone());
 
     match maybe_bmp {
         Ok(bmp) => {

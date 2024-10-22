@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::{Error, ErrorKind, Read},
+    rc::Weak,
 };
 // ref for BMP spec: https://upload.wikimedia.org/wikipedia/commons/7/75/BMPfileFormat.svg
 
@@ -8,9 +9,10 @@ pub struct BMPFileHeader<'a> {
     // (2 bytes) signature of the bmp file
     pub signature: &'a [u8; 2],
     // (4 bytes) size of the bmp file
-    // size: u32,
+    size: u32,
     // (2 bytes) reserved byte 1 for the spec
     // reserved1: u16,
+    // (2 bytes) reserved byte 2 for the spec
     // reserved2: u16,
     // (4 byte) offset from the header where img data is located
     // offset: u32,
@@ -50,15 +52,25 @@ pub struct BMPFile<'a> {
 }
 
 impl<'a> BMPFile<'a> {
-    pub fn validate_file_signature(mut bmp_file: &'a File) -> Result<&'static [u8; 2], Error> {
+    pub fn validate_file_signature(mut bmp_file: &'a File) -> Result<&'a [u8; 2], Error> {
         // validate that the signature is correct
-        let mut bmp_signature_bytes: Vec<u8> = vec![0; 2];
+        let mut bmp_signature_bytes = vec![0; 2];
+
+        // NOTE: the buffer to read into is being passed in as a mutable ref &mut as we're
+        // saying that read_exact(..) can mutate the data that bmp_signature_bytes
+        // references, but the actual referenece cannot be changed and is immutable.
+        // definitely confusing so read it again :)
         bmp_file.read_exact(&mut bmp_signature_bytes)?;
 
         if &bmp_signature_bytes[..2] == b"BM" {
             // tried returning OK(&bmp_signature_bytes[..2]) here but somehow
             // couldn't type constrain it to be &[u8; 2] as it was returning &[u8]
             // instead
+
+            // NOTE: also, b"BM" has type &'static [u8; 2] and a lifetime of static
+            // which is a super set in terms of lifetime 'a since static outlasts
+            // everything and also why we can return it here even though fn signature
+            // expects &'a [u8; 2]
             return Ok(b"BM");
         }
 
@@ -69,10 +81,17 @@ impl<'a> BMPFile<'a> {
         ));
     }
 
-    pub fn parse(bmp_file: &'a File, bmp_signature: &'static [u8; 2]) -> Result<Self, Error> {
+    pub fn parse(mut bmp_file: &'a File, bmp_signature: &'a [u8; 2]) -> Result<Self, Error> {
+        let mut bmp_file_header_file_size = vec![0; 4];
+
+        bmp_file.read_exact(&mut bmp_file_header_file_size)?;
+
+        let file_size = u32::from_le_bytes(bmp_file_header_file_size[..].try_into().unwrap());
+
         Ok(Self {
             header: BMPFileHeader {
                 signature: bmp_signature,
+                size: file_size,
             },
         })
     }
@@ -86,4 +105,13 @@ impl<'a> BMPFile<'a> {
             Err(error) => Err(error),
         }
     }
+}
+
+#[test]
+fn test_bmp_file_header() -> Result<(), Error> {
+    let bmp_file = File::open("./monochrome_test.bmp")?;
+    let parsed_bmp = BMPFile::new(&bmp_file)?;
+    assert_eq!(parsed_bmp.header.signature, b"BM");
+    // file size is 638 bytes. checked with finder on mac
+    Ok(assert_eq!(parsed_bmp.header.size, 638))
 }

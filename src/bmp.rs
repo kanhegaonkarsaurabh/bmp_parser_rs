@@ -1,13 +1,12 @@
-use byteorder::{BigEndian, ReadBytesExt};
 use std::{
     fs::File,
     io::{Error, ErrorKind, Read},
 };
 // ref for BMP spec: https://upload.wikimedia.org/wikipedia/commons/7/75/BMPfileFormat.svg
 
-pub struct BMPFileHeader {
+pub struct BMPFileHeader<'a> {
     // (2 bytes) signature of the bmp file
-    pub signature: [u8; 2],
+    pub signature: &'a [u8; 2],
     // (4 bytes) size of the bmp file
     // size: u32,
     // (2 bytes) reserved byte 1 for the spec
@@ -33,7 +32,7 @@ struct BMPDIBHeader {
     // (4 bytes) size of the image in bytes
     img_size: u32,
 
-    // (4 bytes each) X&Y pixels per meter or resolution
+    //
     // of the image
     x_resolution: i32,
     y_resolution: i32,
@@ -44,17 +43,14 @@ struct BMPDIBHeader {
     imp_colors: u32,
 }
 
-pub struct BMPFile {
-    pub header: BMPFileHeader,
+pub struct BMPFile<'a> {
+    pub header: BMPFileHeader<'a>,
     // dib_header: BMPDIBHeader,
     // img_data: Vec<Vec<u8>>,
 }
 
-impl BMPFile {
-    pub fn validate_file_signature<'a>(bmp_filepath: &'a str) -> Result<&[u8; 2], Error> {
-        let mut bmp_file = File::open(bmp_filepath)?;
-        // first we get the signature bits in header and
-
+impl<'a> BMPFile<'a> {
+    pub fn validate_file_signature(mut bmp_file: &'a File) -> Result<&'static [u8; 2], Error> {
         // validate that the signature is correct
         let mut bmp_signature_bytes: Vec<u8> = vec![0; 2];
         bmp_file.read_exact(&mut bmp_signature_bytes)?;
@@ -73,25 +69,20 @@ impl BMPFile {
         ));
     }
 
-    pub fn parse<'a>(
-        bmp_filepath: &'a str,
-        bmp_signature: &'static [u8; 2],
-    ) -> Result<BMPFile, Error> {
-        // implement further parsing of the bmp file here
-        Ok(BMPFile {
+    pub fn parse(bmp_file: &'a File, bmp_signature: &'static [u8; 2]) -> Result<Self, Error> {
+        Ok(Self {
             header: BMPFileHeader {
-                // in here, we dereference the b"BM" static byte array
-                // so that the struct can store the actual byte string instead
-                // of a ref to a static byte literal on the code's binary. Minute
-                // difference but took a while to figure this out
-                signature: *bmp_signature,
+                signature: bmp_signature,
             },
         })
     }
 
-    pub fn new<'a>(bmp_filepath: &'a str) -> Result<Self, Error> {
-        match BMPFile::validate_file_signature(bmp_filepath) {
-            Ok(bmp_signature) => BMPFile::parse(bmp_filepath, bmp_signature),
+    // NOTE: lifetime of the BMPFile struct will live as long as the lifetime
+    // of the incoming file bmp_file such that the BMPFile shape lives as long
+    // as the data source (file here)
+    pub fn new(bmp_file: &'a File) -> Result<Self, Error> {
+        match Self::validate_file_signature(bmp_file) {
+            Ok(bmp_signature) => Self::parse(bmp_file, bmp_signature),
             Err(error) => Err(error),
         }
     }

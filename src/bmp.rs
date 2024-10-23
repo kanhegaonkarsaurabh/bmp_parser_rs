@@ -11,11 +11,11 @@ pub struct BMPFileHeader<'a> {
     // (4 bytes) size of the bmp file
     size: u32,
     // (2 bytes) reserved byte 1 for the spec
-    // reserved1: u16,
+    reserved1: u16,
     // (2 bytes) reserved byte 2 for the spec
-    // reserved2: u16,
+    reserved2: u16,
     // (4 byte) offset from the header where img data is located
-    // offset: u32,
+    offset: u32,
 }
 
 struct BMPDIBHeader {
@@ -82,16 +82,22 @@ impl<'a> BMPFile<'a> {
     }
 
     pub fn parse(mut bmp_file: &'a File, bmp_signature: &'a [u8; 2]) -> Result<Self, Error> {
-        let mut bmp_file_header_file_size = vec![0; 4];
+        // 4 bytes file size, 2+2 for reserved bytes and then 4 bytes for the file offset
+        let mut bmp_file_header = vec![0; 12];
+        bmp_file.read_exact(&mut bmp_file_header)?;
 
-        bmp_file.read_exact(&mut bmp_file_header_file_size)?;
-
-        let file_size = u32::from_le_bytes(bmp_file_header_file_size[..].try_into().unwrap());
+        let file_size = u32::from_le_bytes(bmp_file_header[..4].try_into().unwrap());
+        let reserved_one = u16::from_le_bytes(bmp_file_header[4..6].try_into().unwrap());
+        let reserved_two = u16::from_le_bytes(bmp_file_header[6..8].try_into().unwrap());
+        let offset_to_img_data = u32::from_le_bytes(bmp_file_header[8..].try_into().unwrap());
 
         Ok(Self {
             header: BMPFileHeader {
                 signature: bmp_signature,
                 size: file_size,
+                reserved1: reserved_one,
+                reserved2: reserved_two,
+                offset: offset_to_img_data,
             },
         })
     }
@@ -112,6 +118,12 @@ fn test_bmp_file_header() -> Result<(), Error> {
     let bmp_file = File::open("./monochrome_test.bmp")?;
     let parsed_bmp = BMPFile::new(&bmp_file)?;
     assert_eq!(parsed_bmp.header.signature, b"BM");
-    // file size is 638 bytes. checked with finder on mac
-    Ok(assert_eq!(parsed_bmp.header.size, 638))
+
+    // -- validated the correct values via `hexdump -C monochrome_test.bmp`
+    assert_eq!(parsed_bmp.header.size, 638);
+
+    assert_eq!(parsed_bmp.header.reserved1, 0);
+    assert_eq!(parsed_bmp.header.reserved2, 0);
+
+    Ok(assert_eq!(parsed_bmp.header.offset, 62))
 }
